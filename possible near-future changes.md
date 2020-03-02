@@ -3,3 +3,5 @@
 
 2. Enable "saving" of vertex groups for the next frames. 
   2.1 Add option to have the vertex group changes keyframed through the addon animall, to see how the vertexweights changed over each frame after the result is finished.
+
+3. disable actual stretching of keyframes, just add the additional frame to the temporary copy of the current frame. 
