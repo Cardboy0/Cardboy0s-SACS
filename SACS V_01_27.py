@@ -47,7 +47,7 @@ max_baking_time = 0
 #Those are the only values you have to specify yourself.
 #The remaining notes ('About this script') are maybe not really of interest to you, but you should definitely check out the requirements-section of that. Once you've done that, you've read all notes you need to read, and the remaining lines of this script are just code that's unimportant for you, meaning you can ignore them.
 
-animate_vgroups = True 
+animate_vgroups = False
 #Requires the animall addon to work. If checked, your final result will have the vertex groups of your original object, but with keyframes that show how the vertex weights changed each frame. Is good for when you use VG-modifiers and want to see what they actually did during baking. However, I think that the copying of vertex weights will actually take some time depending on your vertex-count, not as long as the baking itself, but probably still like at least extra second per frame, so keep that in mind.
 
 ######About this script:########
