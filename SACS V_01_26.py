@@ -17,22 +17,20 @@
 # ##### END GPL LICENSE BLOCK #####
 
 
-#Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.25 
+#Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.26  (I often forget to actually update this number so don't trust it)
 #Author: Cardboy0 (https://www.deviantart.com/cardboy0)
-#Made for Blender 2.81a
+#Made for Blender 2.82
 
 
 
 ############user-dependent values #############
 
-baking_start_f = 100     #the desired first frame of your animation
-baking_end_f   = 115  #the desired last frame of your animation
+baking_start_f = 1     #the desired first frame of your animation
+baking_end_f   = 50  #the desired last frame of your animation
 
 time_stretch_multiplier = 4
 #Stretches the timing of keyframes by that value, meaning with a value of 3 a keyframe at frame 1 will now be at frame 3, a keyframe at frame 2 now at frame 6, and so forth. Beginning with Version 1.13 those extra frames will no longer be used to actually "stretch" the invidual animated frames, but only to be added to the end of each frame-bake, to give the softbody time to cool down any movement or jittering. If you don't want to stretch anything just set it to 1 (not recommended). It only improves the quality noticable up to a certain value (like 8, maybe a bit more, maybe a bit less), after which it will only further slow down the script - use values between 3 and 7.
 
-vis_modifiers = ["Softbody","CorrectiveSmooth","Displace"]   
-#Those are the modifiers of your softbody dummy you want to be applied for each frame, but not actually change the original bake for the next frame bake, basically meaning only visual modifiers. If you're not sure, put all your softbody-dummy modifiers into this list (their actual names - like wireframe.001 - in quotation marks, and seperated with commas). The softbody-modifier you can see in the list as well is an exception, it simply is listed here (and specifically at the first position) because in most cases it needs to be applied before all other visual modifiers. Not all modifiers might work. As a result of this script you'll get two objects, one called "calc", which shows the animation without these visual modifiers (safe for the softbody one), and "visual", which does show them.
 
 
 desired_target_collection = "master_collection" 
@@ -52,7 +50,8 @@ max_baking_time = 0
 
 
 ######About this script:########
-#   (for other versions and a more detailed explanation visit https://www.deviantart.com/cardboy0/art/Cardboy0-s-SACS-Script-for-Blender-827936331)
+#   (for other versions and a more detailed explanation visit https://www.deviantart.com/cardboy0/art/Cardboy0-s-SACS-Script-for-Blender-827936331) or https://github.com/Cardboy0/Cardboy0s-SACS/tree/master)
+#   (for the "retroactive beautifier script", which I recommend using on the results of this script to make them look better using modifiers like corrective smooth with your original animation as the basis, visit https://www.deviantart.com/cardboy0/art/Retroactive-Beautifier-Script-832080660 or https://github.com/Cardboy0/retroactive-beautifier/tree/master)
 #The purpose of this script is to stop softbodies in Blender 2.81 from deforming without any collision by themselves, mainly when being animated. If you don't know what I mean,
 #go into Blender, add a plane, scale it x2 in edit mode and subdivide it like 12 times (10 times and then 2 times again), then give it the following keyframed rotations: At frame 1 - X=90° Y=0° Z=0°, at frame 20 - X=270° Y=0° Z=45°. Then give it the softbody modifier, enable "goal" and "edges" (default values should be enough) in its properties and set its mass to 0kg (so it won't "wobble" because of gravity). 
 #What you'd expect after baking is that nothing happens, because after all, there are no collision objects yet and the enabled goal should make it animate like the keyframes tell it to. What you'll see however, is that the plane gets deformed at some points, showing for instance some weird folding, maybe not to the extreme, but you can see it. The result is also a bit random, as you can bake it again and it will deform slightly different. So if you don't see it, bake it again. (For some reason that self-deforming-effect disappears if you already have a collision object in the scene, but it didn't disappear in my files with more complex meshes.) This is just a simple plane, but if you, let's say, try to use an animated character as a softbody, everything gets way worse: your shapekeys won't work, everything that moves will show folds or wobble a bit like jelly, and other stuff; in other words: it will be impossible to ignore.
@@ -94,7 +93,7 @@ max_baking_time = 0
 
 #       All of them are needed for the script to work, but the NewTek MDD format is the most important one. It's also the addon you're going to have to use yourself to prepare your scene for this script.
 # - Always backup your file before running this script, you don't want to get a nasty surprise.
-# - Specify some values at the top of the script. Choose which frames you want to have baked, how much additional time you're ready to sacrifice for better results (time_stretch_multiplier), which (visual) modifiers you don't want to influence the softbody calculation but still be taken into account for the final result each frame, which collection you want the results to have in, wether you want a additional copy that makes for easier continuing of this script and what framerange that copy should have, and lastly - the amount of time after which you want this script to end if it hasn't baked all frames yet.
+# - Specify some values at the top of the script. Choose which frames you want to have baked, how much additional time you're ready to sacrifice for better results (time_stretch_multiplier), which collection you want the results to have in, wether you want a additional copy that makes for easier continuing of this script and what framerange that copy should have, and lastly - the amount of time after which you want this script to end if it hasn't baked all frames yet.
 # - Preparing your scene: Generally the rule of thumb is that you should always use the mdd-format for all the objects you want to have this script work with. If you export an object as an mdd and then reimport it, your object will animate exactly how it looked in the viewport when exporting, only that now it's being animated by shapekeys, one for each frame. But you need to know some things for this exporting/reimporting to work:
 #    - The animation will only properly show if the object it's being imported on has the exact same amount of vertices, topology, etc. This means that, for instance if you had a subdivision modifier on your object active (in viewport) when exporting it, you need to apply this modifier before reimporting it, to get the same amount of vertices. All modifiers that are being shown in viewport when exporting should be applied afterwards, the hidden ones should be deleted. Also watch out for any mask-modifiers.
 #    - Delete all keyframes before importing, since the importing will not delete anything by itself, meaning your animation will look weird since it's being played twice at the same time.
@@ -156,29 +155,23 @@ def apply_modifiers(object, modifier_list = [], invert = False):                
             O.object.modifier_apply(override, apply_as='DATA', modifier = i)
 
             
-
-
-#since this script will often have to change the displaying of modifiers of at least one object I've decided to put it into a function. If you want no "only-visually" modifiers on the object, write "calc" as the first value, otherwise write "vis". Choosing an empty list will change all modifiers of the object to be shown or not (vis or calc). Doesn't affect softbody-modifiers.
-#example: prepare_for_vis_or_calc("calc",softbody_dummy,vis_modifiers)
-def prepare_for_vis_or_calc(vis_or_calc, object, modifier_list):
+#function that allows for hiding or unhiding certain, or all, modfiers. hide = False will unhide, an empty modifier list will do that with all mods. Often you don't want to hide the SB mod, so I made noSB to restrict it from being hidden. 
+#example:  uhhh never used it lmao
+def hide_mods(object = C.object, hide = True, modifier_list = [], noSB = True):
     if modifier_list == []:
-        modifier_list = object.modifiers.keys() 
+        modifier_list = object.modifiers.keys()
+    if noSB == True:
+        for mods in mod_list:
+            if mods in object.modifiers.keys(): 
+                if object.modifiers[mods].type == 'SOFT_BODY':
+                    mod_list.remove(mod)
+                break
     for mods in modifier_list:
         if mods in object.modifiers.keys(): 
-            if not object.modifiers[mods].type == 'SOFT_BODY':
-                if vis_or_calc == "vis":
-                    object.modifiers[mods].show_viewport = True
-                elif vis_or_calc == "calc":
-                    object.modifiers[mods].show_viewport = False
-                else:
-                    print('wrong input for first value of function "prepare_for_vis_or_calc", only accepts "vis" or "calc"')
-
-
-#only a small function that also uses the prepare_for_vis_or_calc-function in order to work.
-def export_object_mdd (target_file, vis_or_calc, l_frame_start, l_frame_end, l_fps, l_use_rest_frame, visual_modifiers):
-    if vis_or_calc == "vis" or vis_or_calc == "calc":
-        prepare_for_vis_or_calc(vis_or_calc,C.view_layer.objects.active, visual_modifiers)
-    O.export_shape.mdd(filepath=target_file, frame_start=l_frame_start, frame_end=l_frame_end, fps=l_fps, use_rest_frame=l_use_rest_frame)
+            if hide == False:
+                object.modifiers[mods].show_viewport = True
+            elif hide == True:
+                object.modifiers[mods].show_viewport = False
 
 
 #stretches time, if you want to unstretch it simply give it the value (1 / your_original_time_stretch_multiplier)
@@ -265,21 +258,21 @@ def link_objects(objects, link_to, unlink_to = []): #unlink_to needs to be a lis
 
 
 #Creates duplicates of the chosen objects, that only have keyframes for the specified timespan. The last frame is also going to be the Basis-shapekey for the duplicate. Used for collision objects, if they aren't supposed to move anymore after a certain frame.
-#example: print(duplicate_with_cut_keyframes(target_file_coll, "vis", bpy.context.selected_objects, [110,120], 1))
-def duplicate_with_cut_keyframes(target_file, vis_or_calc, object_list, frames_export, l_frame_step = time_stretch_multiplier, mod_list = []): #frames_export like this: [4,10], last number is the basis shapekey.
+#example: print(duplicate_with_cut_keyframes(target_file_coll, bpy.context.selected_objects, [110,120], 1))
+def duplicate_with_cut_keyframes(target_file, object_list, frames_export, l_frame_step = time_stretch_multiplier, mod_list = []): #frames_export like this: [4,10], last number is the basis shapekey.
     created_objects = []
     orig_frame = C.scene.frame_current
     C.scene.frame_set(frames_export[-1])
     for i in object_list:
         select_objects([i])
-        export_object_mdd (target_file, vis_or_calc, frames_export[0], frames_export[-1], C.scene.render.fps, False, mod_list)
+        O.export_shape.mdd (filepath=target_file, frame_start = frames_export[0], frame_end = frames_export[-1])
         O.object.object_duplicate_flatten_modifiers()
         new_object = C.selected_objects[0]
         created_objects = created_objects + [new_object]
         O.import_shape.mdd(filepath=target_file, frame_start=frames_export[0], frame_step = l_frame_step) 
         select_objects([i, new_object])
         O.object.copy_obj_wei()
-        O.object.copy_obj_mod()    #copying modifiers, the vis-modifiers are still disabled. Unlike the default modifier linking, this op (from the "copy attributes" addon) can copy collision modifiers as well.     
+        O.object.copy_obj_mod()    #Unlike the default modifier linking, this op (from the "copy attributes" addon) can copy collision modifiers as well.     
     C.scene.frame_set(orig_frame)
     return created_objects
     
@@ -313,10 +306,12 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):  #this prevents 
 
     time_script_begin = time.time()
     max_baking_time = max_baking_time * 60 #time gets measured in seconds and not minutes, but minutes is easier input for the user.
+   
+        
     #########################################################################
 
 
-    ############assigning the two selected objects to variables##############
+    ############assigning the two selected objects to variables, as well as the SB modifier##############
 
     for i in C.selected_objects:
         if i == C.view_layer.objects.active:
@@ -324,12 +319,17 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):  #this prevents 
         else:
             softbody_dummy = i        
 
+    for mods in softbody_dummy.modifiers:         
+        if mods.type == 'SOFT_BODY':
+            mod_SB = mods           #the softbody-modifier of the SB_dummy. Note however, that each time we create a new duplicate for baking, we must also assign its softbody modifier to a new variable since this one refers specifially to the SB_dummys SBmod. We could just work with it's name instead but that doesn't feel clean.
+        break
+
     #also set their parent collection as the active one, otherwise problems might appear:
     C.view_layer.active_layer_collection = C.view_layer.layer_collection.children[softbody_dummy.users_collection[0].name]      #using the main_anim instead of softbody dummy here can lead to errors.
 
     ###now also the collision objects, put them into a new, temporary collection:
     coll_orig_collision_objs = create_collection('orig collision objs', parent_collection = master_collection, avoid_duplicates = True)
-    link_objects(softbody_dummy.modifiers["Softbody"].settings.collision_collection.objects, coll_orig_collision_objs) #function unlinks them from all previous collections, meaning they're not inside the collision collection anymore
+    link_objects(mod_SB.settings.collision_collection.objects, coll_orig_collision_objs) #function unlinks them from all previous collections, meaning they're not inside the collision collection anymore
     #########################################################################
 
 
@@ -344,30 +344,17 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):  #this prevents 
     blend_file_path = D.filepath
     directory = os.path.dirname(blend_file_path)
     target_file_calc = os.path.join(directory, 'single_frame_bakes_calc.mdd')
-    target_file_vis  = os.path.join(directory, 'single_frame_bakes_for_visual_final_product.mdd')
     target_file_col  = os.path.join(directory, 'temp collision objects')
-    export_object_mdd (target_file_calc, "calc", baking_start_f*time_stretch_multiplier, baking_start_f*time_stretch_multiplier,  C.scene.render.fps, False, vis_modifiers)
+    O.export_shape.mdd (filepath = target_file_calc, frame_start = baking_start_f*time_stretch_multiplier, frame_end = baking_start_f*time_stretch_multiplier)
     #########################################################################
 
 
-    ###creating the "permanent" duplicates that will show the final result#############
-    #since we bake a softbody sim for each frame, we also need to give those finished bakes /shapes to an object on that frame to actually see it in the final animation. The "permanent duplicates" are those objects, they get more and more frames imported.
-    #Two will be created, one uses the finished bake of a frame without the other visual modifiers applied ("calc" duplicate), the other uses it with them ("vis" duplicate). You most likely want the vis-duplicate and thus can delete the calc-duplicate at the end, but maybe you want to look at it as well, for reasons.
-    prepare_for_vis_or_calc("calc",softbody_dummy,vis_modifiers)
+    ###creating the "permanent" duplicate that will show the final result#############
+    #since we bake a softbody sim for each frame, we also need to give those finished bakes /shapes to an object on that frame to actually see it in the final animation. The "permanent duplicate" is that object, it gets more and more frames imported.
     C.scene.frame_set(baking_start_f * time_stretch_multiplier)
     O.object.object_duplicate_flatten_modifiers() #that's the function of the "Corrective Shape Keys" add-on that creates a static copy of your object.
     m_a_perm_dupl_calc = C.selected_objects[0]  #(should be the only selected object if the script worked until now)
-    O.object.duplicate()
-    m_a_perm_dupl_vis = C.selected_objects[0]
-    select_objects([softbody_dummy, m_a_perm_dupl_vis])
-    O.object.make_links_data(type='MODIFIERS')
-
-    #now apply the softbody_dummy modifiers on the vis_dupl (but make them all visible first). The reason this needs to be done is because the mdd-importing technique requires the objects it imports on to to actually have the same topology (i.e. number of vertices) as the imported shape.
-    prepare_for_vis_or_calc("vis",m_a_perm_dupl_vis,vis_modifiers)
-    apply_modifiers(m_a_perm_dupl_vis, vis_modifiers)
-    select_objects([m_a_perm_dupl_calc])
-    O.import_shape.mdd(filepath=target_file_calc, frame_start = (baking_start_f) *time_stretch_multiplier, frame_step=time_stretch_multiplier)
-    #no import on perm_dupl_vis means in total one shapekey less, the basis should look like the first frame however then.
+    
 
     baking_start_f = baking_start_f + 1
     time_average = time.time()
@@ -380,8 +367,8 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):  #this prevents 
 for x in range(baking_end_f - baking_start_f + 1):
     
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
-        temp_col_objects = duplicate_with_cut_keyframes(target_file_col, "vis", coll_orig_collision_objs.objects, [(baking_start_f) * time_stretch_multiplier, (baking_start_f) * time_stretch_multiplier + 1], 1, mod_list = [])
-        link_objects(temp_col_objects, softbody_dummy.modifiers["Softbody"].settings.collision_collection)
+        temp_col_objects = duplicate_with_cut_keyframes(target_file_col, coll_orig_collision_objs.objects, [(baking_start_f) * time_stretch_multiplier, (baking_start_f) * time_stretch_multiplier + 1], 1, mod_list = [])
+        link_objects(temp_col_objects, mod_SB.settings.collision_collection)
         
         
         C.scene.frame_set(baking_start_f* time_stretch_multiplier)  #sets the current frame to one of the scaled keyframes of the main animation object
@@ -390,14 +377,18 @@ for x in range(baking_end_f - baking_start_f + 1):
         
     print('\nCurrent frame:', int((C.scene.frame_current / time_stretch_multiplier)))
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
-        prepare_for_vis_or_calc("calc",softbody_dummy,vis_modifiers)
         select_objects([main_anim])
         O.object.object_duplicate_flatten_modifiers() #creating the (temporary) keyframe-specific duplicate through the "corrective shapekeys" addon. The duplicate gets selected automatically when doing this
         main_anim_dupl = C.selected_objects[0] #(should be the only selected object)
         O.import_shape.mdd(filepath=target_file_calc, frame_start=(baking_start_f - 1) * time_stretch_multiplier, frame_step = 1) #imports the "single_frames_bakes.mdd" on the duplicated object, with stretching of the keyframes according to the time stretch multiplier. This means that even when using no softbody modifier at all, it should still be back to its default shape at the last frame again, as the previous frame is only imported as a shapekey, whose value is keyframed to go down to 0 at the last frame.
         select_objects([softbody_dummy, main_anim_dupl])
         O.object.copy_obj_wei()                       #copying vertex weigths (through that 'Copy Attributes Menu' addon)
-        O.object.make_links_data(type='MODIFIERS')    #copying modifiers, the vis-modifiers are still disabled
+        O.object.make_links_data(type='MODIFIERS')    #copying modifiers
+        
+        for mods in main_anim_dupl.modifiers:         
+            if mods.type == 'SOFT_BODY':
+                mod_SB_t = mods                     #mod_SB (without _t) specifically refers to the SB mod of the original SB-dummy, meaning we have to assign the SB-mod of the temporary duplicate to another, temporary variable to be able to refer to it.
+                break
         
         ######
         #the next part is for vertex group modifiers that the user might have on his softbody_dummy. Good example is a vertex weight proximity modifier - VWP. Because you can't put it before the SB-mod in the mod-stack you can't effectively use them together for instance. We solve that by simply applying the VWP at the beginning of a frame, so the SB-mod *has* to use the modified vertex group. It doesn't affect the original softbody_dummy in any way (if I didn't mess up), which may be needed in other cases, but that will have to be dealed with when it's needed.
@@ -406,11 +397,9 @@ for x in range(baking_end_f - baking_start_f + 1):
         O.object.duplicate()
         vw_duplicate = C.object
         vw_duplicate.active_shape_key_index = 1 #just to be sure. VWP uses the currently selected shapekey with a value of 1 as its base and ignores all others.
-        bpy.ops.object.modifier_remove(modifier="Softbody") #dont want to have any possible baked frames here.
-        for i in vis_modifiers:
-            O.object.modifier_remove(modifier=i) #delete the vis modifiers
+        bpy.ops.object.modifier_remove(modifier=mod_SB.name) #dont want to have any possible baked frames here.
         delete_basis_SK(vw_duplicate)
-        apply_modifiers(vw_duplicate) #we can apply all modifiers - including the VWP to change Vertex weights - since we already deleted the visual ones. The only purpose of this object is to copy its applied vertex groups to the actual baking duplicate.
+        apply_modifiers(vw_duplicate) #we can apply all modifiers - including the VWP to change Vertex weights. The only purpose of this object is to copy its applied vertex groups to the actual baking duplicate.
         
         
             
@@ -425,33 +414,27 @@ for x in range(baking_end_f - baking_start_f + 1):
         #change its softbody timerange of baking:
         select_objects([main_anim_dupl])
         SB_keyframe_insert(((baking_start_f-1) * time_stretch_multiplier), main_anim_dupl)
-        C.object.modifiers["Softbody"].point_cache.frame_start = (baking_start_f-1) * time_stretch_multiplier - 1  #as explained before, since we keyframe the goal value to be exactly 1 at the starting frame, we then actually start the bake one frame earlier, as it wouldn't have an effect otherwise.  
-        C.object.modifiers["Softbody"].point_cache.frame_end = baking_start_f * time_stretch_multiplier
-        
-        #bake it:
-        for modifier in main_anim_dupl.modifiers:
-            if modifier.type == 'SOFT_BODY':
-                override = {'scene': C.scene, 'active_object': main_anim_dupl, 'point_cache': modifier.point_cache}
-                O.ptcache.bake(override, bake=True)
-                break
-        
+        mod_SB_t.point_cache.frame_start = (baking_start_f-1) * time_stretch_multiplier - 1  #as explained before, since we keyframe the goal value to be exactly 1 at the starting frame, we then actually start the bake one frame earlier, as it wouldn't have an effect otherwise.  
+        mod_SB_t.point_cache.frame_end = baking_start_f * time_stretch_multiplier
+            
+        #bake it:    
+        override = {'scene': C.scene, 'active_object': main_anim_dupl, 'point_cache': mod_SB_t.point_cache}
+        O.ptcache.bake(override, bake=True)
+           
         #set the baked tempory duplicate as active again:
         select_objects([main_anim_dupl])
       
         #export the final baked frame into an .mdd and import it on the permanent duplicate:
-        export_object_mdd (target_file_calc, "calc", baking_start_f * time_stretch_multiplier, baking_start_f * time_stretch_multiplier, C.scene.render.fps, False, vis_modifiers)
-        export_object_mdd (target_file_vis, "vis", baking_start_f * time_stretch_multiplier, baking_start_f * time_stretch_multiplier, C.scene.render.fps, False, vis_modifiers)
+        O.export_shape.mdd (filepath = target_file_calc, frame_start = baking_start_f * time_stretch_multiplier, frame_end = baking_start_f * time_stretch_multiplier)
         select_objects([m_a_perm_dupl_calc])
         O.import_shape.mdd(filepath=target_file_calc, frame_start = (baking_start_f) *time_stretch_multiplier, frame_step=time_stretch_multiplier)
-        select_objects([m_a_perm_dupl_vis])
-        O.import_shape.mdd(filepath=target_file_vis, frame_start = (baking_start_f) *time_stretch_multiplier, frame_step=time_stretch_multiplier)
         
         #delete the temporary duplicate again, a new one will be created in the next round of this for-loop.
         select_objects([main_anim_dupl])
         O.object.delete(use_global=False)
         
         #delete temp collision objects
-        for i in softbody_dummy.modifiers["Softbody"].settings.collision_collection.objects:
+        for i in mod_SB.settings.collision_collection.objects:
             select_objects([i])
             O.object.delete(use_global=False)
         
@@ -490,24 +473,23 @@ print('\nAlmost finished!')
 
 with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
     m_a_perm_dupl_calc.name = "calc"
-    m_a_perm_dupl_vis.name = "visual"
 
 
     main_collection = create_collection('SACS_script_results', parent_collection = desired_target_collection, avoid_duplicates = True)
     sub_collection  = create_collection('frames'+str(true_baking_start_f)+'-'+str(baking_end_f), parent_collection = main_collection, avoid_duplicates = False)
-    coll_link_list = [m_a_perm_dupl_calc , m_a_perm_dupl_vis]       #all objects inside this list will be linked to our new collection later. They'll also be unlinked from their current linked collection, which should only be one.
+    coll_link_list = [m_a_perm_dupl_calc]       #all objects inside this list will be linked to our new collection later. They'll also be unlinked from their current linked collection, which should only be one.
 
 
     if main_anim_copy == True:
         target_file_ma_copy = os.path.join(directory, 'main_anim_copy with baked frame')
         select_objects([main_anim])
-        export_object_mdd (target_file_ma_copy, "calc", baking_end_f + 1, anim_last_frame, C.scene.render.fps, False, vis_modifiers)
+        O.export_shape.mdd (filepath = target_file_ma_copy, frame_start = baking_end_f + 1, frame_end = anim_last_frame)
         O.object.object_duplicate_flatten_modifiers()
         main_anim_copy = C.selected_objects[0]
         main_anim_copy.name = main_anim.name + ' baked copy'
         O.import_shape.mdd(filepath=target_file_ma_copy, frame_start = baking_end_f + 1, frame_step=C.scene.frame_step) 
         select_objects([m_a_perm_dupl_calc])
-        export_object_mdd (target_file_ma_copy, "calc", baking_end_f, baking_end_f, C.scene.render.fps, False, vis_modifiers)
+        O.export_shape.mdd (filepath = target_file_ma_copy, frame_start = baking_end_f, frame_end = baking_end_f)
         select_objects([main_anim_copy])
         O.import_shape.mdd(filepath=target_file_ma_copy, frame_start = baking_end_f, frame_step=C.scene.frame_step) 
         coll_link_list = coll_link_list + [main_anim_copy]
@@ -520,11 +502,11 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
 
 
     #put the original collision objects into the collision collection again.
-    link_objects(coll_orig_collision_objs.objects, softbody_dummy.modifiers["Softbody"].settings.collision_collection)
+    link_objects(coll_orig_collision_objs.objects, mod_SB.settings.collision_collection)
     bpy.data.collections.remove(coll_orig_collision_objs)   #removes the temporary needed collection for the collision objects. Sidenote: removing a collection will unlink all collections inside from your current scene.
 
     C.scene.frame_set(default_frame)  #small note, just noticed that using this line will make your current active object not be active anymore.
-    select_objects([m_a_perm_dupl_vis])
+    select_objects([m_a_perm_dupl_calc])
 
     time_script_end = time.time()
 print('\n\nScript took %s minutes to finish.' % (round(((time_script_end - time_script_begin)/60),2)))
@@ -555,3 +537,5 @@ print('\n\n'+2*print_symbol_asterik+'\nScript finished!\n\n'+2*print_symbol_aste
 #small troubleshooting:
 #   - If your softbody seems to get stuck, or even sucked into your collision object (CO), try inverting the normals of the CO. It happened to me in one of my files for all collision objects (I have no idea how), but that fixed it.
 #   - If the script seems to run very slow even when only baking frames where there aren't any collisions yet, stop the script by pressing ctrl+c in the console, and undo the run-script-action. Just click around in your scene a bit, unhide your collision objects and select your 2 objects again. It sometimes happens to me, I don't really know why, but it almost always seems to not happen more than once in a row. If you actually let the script run until it's finished you'll notice that the results already start deforming too early (and probably not in the right way), for whatever reason.  
+#   - visit https://www.deviantart.com/cardboy0/journal/Troubleshooting-823914200 for more troubleshooting
+
