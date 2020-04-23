@@ -17,7 +17,7 @@
 # ##### END GPL LICENSE BLOCK #####
 
 
-#Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.26  (I often forget to actually update this number so don't trust it)
+#Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.30_1  (I often forget to actually update this number so don't trust it)
 #Author: Cardboy0 (https://www.deviantart.com/cardboy0)
 #Made for Blender 2.82
 
@@ -284,7 +284,13 @@ def duplicate_with_cut_keyframes(target_file, object_list, frames_export, l_fram
         O.import_shape.mdd(filepath=target_file, frame_start=frames_export[0], frame_step = l_frame_step) 
         select_objects([i, new_object])
         O.object.copy_obj_wei()
-        O.object.copy_obj_mod()    #Unlike the default modifier linking, this op (from the "copy attributes" addon) can copy collision modifiers as well.     
+        O.object.copy_obj_mod()    #Unlike the default modifier linking, this op (from the "copy attributes" addon) can copy collision modifiers as well. But I later found out that it resets all its values, meaning it's basically useless. I'm going to keep it in here anyways and copy each import-setting one by one.
+        new_object.collision.damping = i.collision.damping
+        new_object.collision.thickness_outer = i.collision.thickness_outer
+        new_object.collision.thickness_inner = i.collision.thickness_inner
+        new_object.collision.cloth_friction = i.collision.cloth_friction
+        new_object.collision.use_culling = i.collision.use_culling
+        new_object.collision.use_normal = i.collision.use_normal
     C.scene.frame_set(orig_frame)
     return created_objects
     
@@ -516,7 +522,8 @@ for x in range(baking_end_f - baking_start_f + 1):
         SB_keyframe_insert(((baking_start_f-1) * time_stretch_multiplier), main_anim_dupl)
         mod_SB_t.point_cache.frame_start = (baking_start_f-1) * time_stretch_multiplier - 1  #as explained before, since we keyframe the goal value to be exactly 1 at the starting frame, we then actually start the bake one frame earlier, as it wouldn't have an effect otherwise.  
         mod_SB_t.point_cache.frame_end = baking_start_f * time_stretch_multiplier
-            
+        
+  
         #bake it:    
         override = {'scene': C.scene, 'active_object': main_anim_dupl, 'point_cache': mod_SB_t.point_cache}
         O.ptcache.bake(override, bake=True)
