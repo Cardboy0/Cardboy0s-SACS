@@ -20,7 +20,7 @@
 #Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.30.1  (I often forget to actually update this number so don't trust it)
 #Author: Cardboy0 (https://www.deviantart.com/cardboy0)
 #Made for Blender 2.82
-
+ 
 
 
 ############user-dependent values #############
