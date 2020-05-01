@@ -17,7 +17,7 @@
 # ##### END GPL LICENSE BLOCK #####
 
 
-#Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.30_1  (I often forget to actually update this number so don't trust it)
+#Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.31  (I often forget to actually update this number so don't trust it)
 #Author: Cardboy0 (https://www.deviantart.com/cardboy0)
 #Made for Blender 2.82
 
@@ -54,8 +54,12 @@ automatic_mdd = False
 #If you don't want to do the preparing of your original object with mdd each time yourself (see requirements section), you can choose to let the script do it for you. If things don't work you'll have to do it yourself though. Also the softbody-dummy is still required, and he needs to have the applied shape of your orig-object. Main reason are vertex groups that you can only modify when mods like subdiv already have been applied. You can probably just use the "create duplicate for editing"-option in the shapekey-menu to create that "applied" copy for the softbody-dummy though.
 #If True, the automatic copy will also not be deleted, but instead added to the final result collection, so you can use that from then on and disable this option or check if something went wrong.
 #It will also do the same for your collision objects, and change the softbody-dummy's collision group to the one that has the new mdd versions in them. Meaning if you want to change that back, you have to change the collision collection yourself again. Same goes for vertex weight proximity modifiers that have one of the collision objects as a control object.
+
 automatic_timerange = [90,130]
 #only used if automatic_mdd is set to True, this will let you choose how many frames of your original object should be used when preparing. You may want to use more than your actual script-range is, since some things do things with later frames, e.g. the main_anim_copy. Default = [1,250]
+
+automatic_scaling = True
+#I found out that softbodies give better results the bigger they are. If this option is activated, the script will automatically scale your objects to the biggest size possible while baking - that is at which point a thickness of your collision objects gets to 1 (the thickness gets scaled too), since that's the maximum. If you think that it's responsible for bad results, turn this option off.
 ######################
 
 #Those are the only values you have to specify yourself.
@@ -354,22 +358,55 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):  #this prevents 
     #########################################################################
 
 
-    ############assigning the two selected objects to variables, as well as the SB modifier##############
-
+    ############Creating 2 duplicates of the selected objects so we don't mess up the originals
+    #and assign them to variables
+    O.object.duplicate()
     for i in C.selected_objects:
         if i == C.view_layer.objects.active:
-            main_anim = i                       #remember that if automatic_mdd == True, this is is the original and not the usable duplicate yet.
+            main_anim = i                       #remember that if automatic_mdd == True, this is is the original-duplicate and not the usable (mdd) duplicate yet.
         else:
             softbody_dummy = i        
-
+    
+    
+    #assigning the softbody-mod to a variable for easy referencing
     for mods in softbody_dummy.modifiers:         
         if mods.type == 'SOFT_BODY':
             mod_SB = mods           #the softbody-modifier of the SB_dummy. Note however, that each time we create a new duplicate for baking, we must also assign its softbody modifier to a new variable since this one refers specifially to the SB_dummys SBmod. We could just work with it's name instead but that doesn't feel clean.
         break
 
+    if automatic_scaling == True:
+        #since we don't want to mess up the original collision objects as well, we also have to duplicate them, and put the originals into a save collection. Something like this is also done almost immediatly after these lines, which is due to me adding this line of code later and not wanting to understand how these other lines worked exactly.
+        actual_orig_coll_obs = create_collection("actual original coll_obs", avoid_duplicates = True)
+        link_objects(mod_SB.settings.collision_collection.objects, actual_orig_coll_obs)
+        select_objects(actual_orig_coll_obs.objects)
+        O.object.duplicate()
+        coll_obs_duplicates = C.selected_objects
+        link_objects(C.selected_objects, mod_SB.settings.collision_collection) #selected objects are the duplicates.
+        
+        select_objects([main_anim]+list(coll_obs_duplicates))
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)    #if the locations aren't at 0 0 0, the scaling will lead to different locations than the originals later on. Might conflict with automatic_mdd, but I haven't tried yet.
+        
+        select_objects([main_anim]+list(mod_SB.settings.collision_collection.objects))
+        h_thickness = 0       #while we could technically scale our objects to extreme values, we can't forget that the thickness of the collision objects needs to be scaled as well. However, they have a maximum value, which is 1 (1 meter). So we have to find out what the highest scale is at which the highest thickness just reaches 1.
+        for i in mod_SB.settings.collision_collection.objects:
+            if i.collision.thickness_outer > h_thickness:
+                h_thickness = i.collision.thickness_outer
+            if i.collision.thickness_inner > h_thickness:
+                h_thickness = i.collision.thickness_inner
+        max_scale = 1/h_thickness
+        #Some pivot points, like invidual origins, give wrong results. Using the 3D Cursor works though.
+        scale_orig_p_point = C.scene.tool_settings.transform_pivot_point
+        C.scene.tool_settings.transform_pivot_point = 'CURSOR'
+        bpy.ops.transform.resize(value=(max_scale,max_scale,max_scale))
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        for i in mod_SB.settings.collision_collection.objects:
+            i.collision.thickness_outer = i.collision.thickness_outer * max_scale
+            i.collision.thickness_inner = i.collision.thickness_inner * max_scale
+    
+    
     #also set their parent collection as the active one, otherwise problems might appear:
     C.view_layer.active_layer_collection = C.view_layer.layer_collection.children[softbody_dummy.users_collection[0].name]      #using the main_anim instead of softbody dummy here can lead to errors.
-   
+    
     
     ###now also the collision objects, put them into a new, temporary collection:
     #but first create the final collections:
@@ -622,9 +659,28 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
 
     link_objects(coll_link_list, sub_collection, [])
 
-
-    #put the original collision objects into the collision collection again.
+   
+    
+    #put the duplicates of the actual original collision objects into the collision collection again. #yes I know that this is confusing since they aren't the actual duplicates if automatic_scaling is enabled, I just wanted to add some lines of code without having to revisit the whole script again.
     link_objects(coll_orig_collision_objs.objects, mod_SB.settings.collision_collection)
+
+    #maybe we don't have to link them at all if the originals remained in the original softbody collision collection?
+
+    #getting rid of all the stuff we did if the scaling-option is enabled.
+    if automatic_scaling == True:
+        select_objects([main_anim]+list(coll_obs_duplicates)+[m_a_perm_dupl_calc])
+        bpy.ops.transform.resize(value=(1/max_scale,1/max_scale,1/max_scale))
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        select_objects([main_anim] + list(coll_obs_duplicates)+[softbody_dummy])
+        link_objects(actual_orig_coll_obs.objects, mod_SB.settings.collision_collection)
+        O.object.delete(use_global=False)
+        bpy.data.collections.remove(actual_orig_coll_obs)
+        C.scene.tool_settings.transform_pivot_point = scale_orig_p_point
+    else:
+        select_objects([main_anim, softbody_dummy]) #remember that those are duplicates of the original objects, meaning we can safely delete them.
+        O.object.delete(use_global=False)
+
+
     bpy.data.collections.remove(coll_orig_collision_objs)   #removes the temporary needed collection for the collision objects. Sidenote: removing a collection will unlink all collections inside from your current scene.
 
     C.scene.frame_set(default_frame)  #small note, just noticed that using this line will make your current active object not be active anymore.
