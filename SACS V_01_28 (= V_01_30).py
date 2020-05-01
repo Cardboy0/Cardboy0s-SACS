@@ -15,7 +15,7 @@
 #  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #
 # ##### END GPL LICENSE BLOCK #####
-
+ 
 
 #Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.26  (I often forget to actually update this number so don't trust it)
 #Author: Cardboy0 (https://www.deviantart.com/cardboy0)
