@@ -1,7 +1,7 @@
 # Cardboy0s-SACS
 
 
-Due to me not wanting to copy everything everywhere, visit https://www.deviantart.com/cardboy0 for tutorials and tips concerning this script.
+Due to me not wanting to copy everything everywhere, visit https://docs.google.com/document/d/1rpJIQqvXcGL9UN-JYzqRKVHk8xaMxgCKM0UYLyqDW_A/edit for tutorials and tips concerning this script.
 
 As the name says, it's for softbodies in Blender, more specifically animated ones, be it through modifiers, transforms or shapekeys. If you use a default softbody with animations, that softbody will interpret these animations as external forces and thus deform even if there's no collision object anywhere, and for instance try to take on the shape of the Basis shapekey. By using this script, your softbody will animate like it originally did before (depending on your values maybe still a tiny bit different though), and only deform when collision objects collide with it. However your softbody will not be able to work with velocities as each frame gets baked in a seperate simulation for more than one frame, so velocities of previous frames will not be saved. In other words, it won't show gravity acceleration for instance. It's main purpose is for deforming your softbody to get bulges or dents, not make it jiggle or wobble.
 All the important stuff is written in the script-file itself, so technically you don't need this README.
