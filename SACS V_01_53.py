@@ -17,9 +17,9 @@
 # ##### END GPL LICENSE BLOCK #####
 
 
-#Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.50  (I often forget to actually update this number so don't trust it)
+#Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.53  (I often forget to actually update this number so don't trust it)
 #Author: Cardboy0 (https://twitter.com/cardboy0)
-#Made for Blender 2.82
+#Made for Blender 2.83
 
 
 
@@ -116,6 +116,8 @@ easy_mode = True                    #(default = True)
 #################################
 #############CHANGELOG###########
 
+#V 1.53
+#       - Result works with Retroactive-Beautifier-Script again.
 #V 1.50
 #       - Completely rewrote the text at the beginning of the script.
 #           + Added a Changelog
@@ -127,6 +129,8 @@ easy_mode = True                    #(default = True)
 #       - removed the automatic_mdd option from the script.
 #       - removed the "main_anim_copy" and "animate_vgroups" options from the settings. They've not been removed completely, I'm just like 80% sure that they won't give good results when combined with easy_mode right now, so I hid them.
 #       - fixed a bug that gave you an error when the objects were in a subcollection of another collection.
+
+
 
 #V 1.31 and earlier
 #       - Some stuff lol. Didn't want to investigate everything for this again.
@@ -160,6 +164,8 @@ import os
 import time
 import contextlib
 import sys
+import bmesh
+import random
 
 print('##########################################################################')
 print('script "Softbodies with animation/shapekeys calculation begin"')
@@ -277,7 +283,7 @@ def input_values_lines(default_value, line_text): #just the name
     return default_value
 
 
-#checks if there already are any collections inside the target_collection that start with the collection_name (so it can detect i.e. myCollection.001 if you search for any myCollection). Returns the first found collection, or False if none were found.
+#checks if there already are any collections inside the target_collection that start with the collection_name (so it can detect i.e. myCollection.001 if you search for any myCollection). Returns the first found collection, or False if none were found. Checks child collections of child collections as well, and so on.
 #example: check_collections('Collec', bpy.context.scene.collection) #(bpy.context.scene.collection is the master-collection of your scene, it contains all other collections)
 def check_collections (collection_name, target_collection): 
     if list(target_collection.children) == []:
@@ -370,6 +376,156 @@ def find_viewlayer_collection(collName, layerColl = None):
         found = find_viewlayer_collection(collName, layer)
         if found:
             return found
+            
+            
+###This function deals with vertex indices of objects, mainly resetting them to their original indices. You give your original object a cSK (Calibrating Shapekey) with the subfunction = "create_cSK". Then you make sure that the objects that base off of this original one keep that shapekey or get it transfered to from the original with "transfer_cSK". Once vertex indices are messed up, you may use "reset_vi" to reset them back to the indices of the original object. For that, the cSKs of both objects have to still look exactly the same, since the function compares vertex coordinates to assign indices. Delete a cSK after finishing with "delete_cSK". The cSKs need also to have the same name everytime as it is used for identification.
+#Example: vertindex_calibrate("create_cSK", "cSK_123r5qwadasd", D.objects['Icosphere']) . A passive_object is only required for the subfunctions "transfer_cSK" and "reset_vi", and in both cases that should be the original object.
+def vertindex_calibrate(subfunction, cSK_name, active_object, passive_object = None):
+    
+    def find_SK (Obj, SK_name):
+        for i in Obj.data.shape_keys.key_blocks:
+            if i.name == SK_name:
+                SK = i
+                break
+        return SK
+    
+    
+    O.object.mode_set(mode='OBJECT') #CHANGING THE COORDINATES DOESNT CHANGE ANYTHING WHEN IN EDIT MODE - maybe verts need to be "updated" somehow?
+    Obj_active = active_object
+    Obj_passive = passive_object
+    if Obj_passive == None:
+        Obj_passive = Obj_active    #some subfunctions dont require a second object
+    
+    soSK_act    = Obj_active.show_only_shape_key
+    soSK_pass   = Obj_passive.show_only_shape_key
+    ueSK_act    = Obj_active.use_shape_key_edit_mode
+    ueSK_pass   = Obj_passive.use_shape_key_edit_mode
+    SKact_orig  = Obj_active.active_shape_key
+    SKpass_orig = Obj_passive.active_shape_key
+    
+    mods_unhidden_act = []
+    mods_unhidden_pass = []
+    for obj, mod_list in zip([Obj_active, Obj_passive],[mods_unhidden_act, mods_unhidden_pass]):
+        for mod in obj.modifiers:
+            if mod.show_viewport == True:
+                mod_list = mod_list + [mod]
+                mod.show_viewport == False
+    
+    O.object.select_all(action='DESELECT')
+    Obj_active.select_set(True)
+    Obj_passive.select_set(True)
+    C.view_layer.objects.active = Obj_active
+    
+    
+    
+    if subfunction == "create_cSK":
+        Obj_active.show_only_shape_key = True
+        Obj_active.active_shape_key_index = 0
+        O.object.object_duplicate_flatten_modifiers()
+        Obj_static = C.object
+        g = 1
+        
+        while True:
+            if len(Obj_static.data.vertices) > g**3:
+                g = g +1
+            else:
+                break
+        cSK_COs = [[0,0,0]]
+        for i in [0,1,2]:
+            for e in cSK_COs:   #should not update while loop is running
+                for c in range(g-1):
+                    c = c + 1
+                    temp_CO     = e.copy()
+                    temp_CO[i]  = temp_CO[i] + c
+                    cSK_COs     = cSK_COs + [temp_CO]
+                    
+        for i in range(len(Obj_static.data.vertices)):
+            Obj_static.data.vertices[i].co = cSK_COs[i]
+            
+        O.object.select_all(action='DESELECT')
+        Obj_active.select_set(True)
+        Obj_static.select_set(True)
+        C.view_layer.objects.active = Obj_active
+        
+        O.object.join_shapes()
+        cSK_act = Obj_active.data.shape_keys.key_blocks[-1]
+        cSK_act.name = cSK_name
+        
+        O.object.select_all(action='DESELECT')
+        Obj_static.select_set(True)
+        O.object.delete(use_global=False)
+
+
+
+    elif subfunction == "transfer_cSK":
+        cSK_pass = find_SK(Obj_passive, cSK_name)
+
+        Obj_passive.active_shape_key_index = list(Obj_passive.data.shape_keys.key_blocks).index(cSK_pass)
+        Obj_passive.show_only_shape_key = True
+        
+        O.object.join_shapes()
+        
+        cSK_act = Obj_active.data.shape_keys.key_blocks[-1]
+        cSK_act.name = cSK_name
+
+
+
+    elif subfunction == "reset_vi":
+        cSK_act  = find_SK (Obj_active , cSK_name)
+        cSK_pass = find_SK (Obj_passive, cSK_name)
+        
+        for obj, SK in zip([Obj_active, Obj_passive], [cSK_act, cSK_pass]):
+            obj.active_shape_key_index = list(obj.data.shape_keys.key_blocks).index(SK) #using .active_shapekey instead doesn't work since it's read-only
+            obj.use_shape_key_edit_mode = False
+
+        O.object.mode_set(mode='EDIT')
+        bm_Obj_passive = bmesh.from_edit_mesh(Obj_passive.data)
+        bm_Obj_active = bmesh.from_edit_mesh(Obj_active.data)
+        for i in bm_Obj_passive.verts:
+            for e in bm_Obj_active.verts:
+                if i.co == e.co:
+                    e.index = i.index
+                    break
+        
+        #these two lines are what makes the vertex indices actually change / update
+        bm_Obj_active.verts.sort()
+        bmesh.update_edit_mesh(Obj_active.data)
+ 
+        O.object.mode_set(mode='OBJECT')
+    
+        cSK_act = "VI-RESET SUCCESSFUL"
+    
+    
+    
+    elif subfunction == "delete_cSK":
+        cSK_act = find_SK (Obj_active, cSK_name)
+        
+        Obj_active.shape_key_remove(cSK_act)
+        
+        csK_act = "DELETION SUCCESSFUL"
+
+    
+    
+    else:
+        return("ERROR - INVALID SUBFUNCTION VALUE")
+
+
+
+    Obj_active.show_only_shape_key      = soSK_act
+    Obj_passive.show_only_shape_key     = soSK_pass
+    Obj_active.use_shape_key_edit_mode  = ueSK_act
+    Obj_passive.use_shape_key_edit_mode = ueSK_pass    
+    for obj,SK in zip([Obj_active, Obj_passive],[SKact_orig, SKpass_orig]):
+        if SK != None: #if the object had no SKs at the beginning, the SK-variable will be a None-object
+            obj.active_shape_key_index = list(obj.data.shape_keys.key_blocks).index(SK)
+        else:
+            obj.active_shape_key_index = 0
+
+    for mod_list in [mods_unhidden_act, mods_unhidden_pass]:
+        for mod in mod_list:
+            mod.show_viewport == True
+
+    return cSK_act
 #########################################################################
 
 
@@ -426,53 +582,53 @@ if easy_mode == True: #does a lot of automation
     print('easy_mode = True    => Peparing your scene...')
     print('    ... doing some stuff')
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f): #mute all prints
-        original_model = C.object
+        Obj_original = C.object
         O.object.duplicate()
-        unedited_model = C.object
+        Obj_main = C.object
 
         blend_file_path = D.filepath #the lines are going to appear another time in this script, but it doesn't really matter if they're written twice.
         directory = os.path.dirname(blend_file_path)
         target_file_calc = os.path.join(directory, 'single_frame_bakes_calc.mdd')
         target_file_col  = os.path.join(directory, 'temp collision objects')
 
-        for mods in unedited_model.modifiers:         
+        for mods in Obj_main.modifiers:         
             if mods.type == 'SOFT_BODY':
-                mod_SB_umodel = mods
+                ModSB_main = mods
                 break
-        for mods in original_model.modifiers:         
+        for mods in Obj_original.modifiers:         
             if mods.type == 'SOFT_BODY':
-                mod_SB_orig = mods
+                ModSB_original = mods
                 break
         
-        show_viewport_of_SB_orig = mod_SB_orig.show_viewport #"saving" the original state of the SB mod
-        mod_SB_orig.show_viewport = False #...unhidden just never gives anything but problems
-        mod_SB_umodel.show_viewport = False #Noticed that when it's unhidden, an error will appear later on when applying the modifiers which causes blender to crash completely
+        show_viewport_of_SB_orig = ModSB_original.show_viewport #"saving" the original state of the SB mod
+        ModSB_original.show_viewport = False #...unhidden just never gives anything but problems
+        ModSB_main.show_viewport = False #Noticed that when it's unhidden, an error will appear later on when applying the modifiers which causes blender to crash completely
         
         O.object.mode_set_with_submode(mode='EDIT',  mesh_select_mode = {"VERT"} ) #me must make sure that only vertex selection is possible in edit mode, otherwise problems will appear
         O.object.mode_set(mode='OBJECT')
 
-        coll_mdd_collis_obs = create_collection ("mdd_collision_objects", avoid_duplicates = False)
-        select_objects(mod_SB_umodel.settings.collision_collection.objects)
+        Coll_mddcollision_objs = create_collection ("mdd_collision_objects", avoid_duplicates = False)
+        select_objects(ModSB_main.settings.collision_collection.objects)
         O.object.duplicate() #skin modifier gives a different copy? Even manually? Skin is just weird, ignore for now.
-        mdd_collis_obs = C.selected_objects
+        L_mddcollision_objs = C.selected_objects
         
-        link_objects(mdd_collis_obs, coll_mdd_collis_obs)
+        link_objects(L_mddcollision_objs, Coll_mddcollision_objs)
 #########################################################################
     print('    ... Converting your objects with the .mdd Format')
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
         #exporting and importing the .mdd files as well as applying/deleting modifiers and changing VGroups
-        for i in [unedited_model]+mdd_collis_obs:
+        for i in [Obj_main]+L_mddcollision_objs:
             #exporting and applying mods                                                         
             select_objects([i])
-            if i == unedited_model:    
+            if i == Obj_main:    
                 O.export_shape.mdd (filepath = target_file_calc, frame_start = first_frame, frame_end = last_frame)
                 
                 #before applying the modifiers, we will assign the SB-goal VG to a variable, since we need to edit it later. We will also create a copy of SB-goal, with the sole purpose of using it to "reset" the original SB-goal to its original weights once the Script has finished, using the vertex weight mix modifier. It could lead to problems for the user if vertex groups change when using the script.
-                VG_goal_name    = mod_SB_umodel.settings.vertex_group_goal #the mod itself only returns a string instead of the required VG-type
-                VG_goal         = unedited_model.vertex_groups[VG_goal_name]
-                unedited_model.vertex_groups.active_index = VG_goal.index
+                VG_goal_name    = ModSB_main.settings.vertex_group_goal #the mod itself only returns a string instead of the required VG-type
+                VG_goal         = Obj_main.vertex_groups[VG_goal_name]
+                Obj_main.vertex_groups.active_index = VG_goal.index
                 O.object.vertex_group_copy() #when copying is finished, the new copy is active by default
-                VG_goal_backup  = unedited_model.vertex_groups.active
+                VG_goal_backup  = Obj_main.vertex_groups.active
                 #setting armatures to rest position. We'll not do this for the collision objects since they will just be deleted later on. The only purpose of this is so that the bulge result has the rest position as its basis shapekey, it's not actually required.
                 
 
@@ -486,21 +642,21 @@ if easy_mode == True: #does a lot of automation
             else:
                 O.export_shape.mdd (filepath = target_file_calc, frame_start = first_frame, frame_end = last_frame + 1) #the collision objects need to be animated through shapekeys for one more additional frame, otherwise it's very likely to fuck things up
                  
-            mods_collision = []
+            L_mods_collision = []
             apply_invert = False
             select_objects([i])
             i.shape_key_clear()     #modifiers can't be applied when the object has shapekeys
             for mods in i.modifiers:
                 if mods.type == 'COLLISION':
                     apply_invert = True
-                    mods_collision = mods_collision + [mods.name]
-            apply_modifiers(object = i, modifier_list = mods_collision, invert = apply_invert, delete_hidden = True)            #applys/deletes all modifiers except any collision modifiers the object might have
+                    L_mods_collision = L_mods_collision + [mods.name]
+            apply_modifiers(object = i, modifier_list = L_mods_collision, invert = apply_invert, delete_hidden = True)            #applys/deletes all modifiers except any collision modifiers the object might have
             O.anim.keyframe_clear_v3d() #clears all transformation keyframes of the object (Object -> animation -> clear keyframe). We might have to delete all keyframes though.
             O.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
             O.object.transform_apply(location=True, rotation=True, scale=True)
-            if i == unedited_model: #resetting the armatures of unedited_model to their original state (rest or pose) since we temporily changed them to rest.
+            if i == Obj_main: #resetting the armatures of Obj_main to their original state (rest or pose) since we temporily changed them to rest.
                 n = 0                     
-                for mods in original_model.modifiers:         
+                for mods in Obj_original.modifiers:         
                     if mods.type == 'ARMATURE':
                         mods.object.data.pose_position = armature_positions[n]
                         n = n + 1
@@ -508,12 +664,20 @@ if easy_mode == True: #does a lot of automation
             ###importing
             select_objects([i])
             O.import_shape.mdd(filepath=target_file_calc, frame_start = first_frame)
+        
+        n_cSK = "cSK_" + str(random.randint(1000000,9999999)) #using the same name for every run of this script could lead to problems, so we'll choose a random name for each run instead. 
+        vertindex_calibrate("create_cSK", n_cSK, Obj_main)
+        select_objects([Obj_main])
+        O.object.duplicate()
+        Obj_VI_main = C.selected_objects[0]
+        Obj_VI_main.name = "VI_OBJECT"
 
     print('    ... Preparing the goal vertex group')
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
         ###giving the SB_goal VG anchor vertices. "Anchor" because with the right values, these vertices will not deform in any way through the softbody sim. This is especially helpful since we isolate the belly from the body and want to fuse them back together once everything is finished, and since those anchor vertices will not change their animation, we can use them as perfect merging points. Also they will keep the belly from being pushed around in space. 
-        select_objects([unedited_model])
-        unedited_model.vertex_groups.active_index = VG_goal.index
+        VG_anchor = Obj_main.vertex_groups.new() #<-not actually used here yet, it's for dealing with fusing at the end.
+        select_objects([Obj_main])
+        Obj_main.vertex_groups.active_index = VG_goal.index
         O.object.mode_set(mode='EDIT')
         O.mesh.select_all(action='DESELECT')
         O.object.vertex_group_select()
@@ -521,47 +685,78 @@ if easy_mode == True: #does a lot of automation
         O.object.vertex_group_deselect()
         C.scene.tool_settings.vertex_group_weight = 1
         O.object.vertex_group_assign()
+        Obj_main.vertex_groups.active = VG_anchor
+        O.object.vertex_group_assign()
         O.object.mode_set(mode='OBJECT')
 
     print('    ... Isolating the belly from the body into its own object')
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
-        ###isolating            For reasons I dont fully understand, we can't just use the whole remaining body as anchor points. Because even though these anchor points will not deform in any way through the Softbody Sim, they will still influence the time it takes to bake, increasing it significantly. So, the best idea I came up with to prevent this issue, is to split the belly part into its own object, do the baking, and then at the end fuse it and the body back together again.
-        select_objects([unedited_model])
-        mdd_belly = unedited_model
+        ###isolating            For reasons I dont fully understand, we can't just use the whole remaining body as anchor points. Because even though these anchor points will not deform in any way through the Softbody Sim, they will still influence the time it takes to bake, increasing it significantly. So, the best idea I came up with to prevent this issue, is to split the belly part into its own object, do the baking, and then at the end fuse it and the body back together again. However, with versions past 1.50, the isolating and fusing will be done a bit more complicated. Instead of just merging vertices with the same coordinates together later on, the script will remember each vertex and will only merge the same ones. This makes a difference when the original model already has vertices at the same coordinates, since those would've normally been merged together as well.
+        vertex_indices      = []    #When fusing two objects back together later on, we need to know which vertex of one object is the same one in the other object. We'll use this method instead of their coordinates since some models can have multiple vertices at the same coordinates, and then we couldn't distinguish between those.
+        vertex_VGs_belly    = []    #due to problems with calling vertices, each vertex will be assigned to a single Vertex Group, so that we can use those Vertex Groups to call the vertices. Maybe I should use the cSK_calibrate function here as well instead, but that's for another time.
+        vertex_VGs_body     = []
+        
+        select_objects([Obj_main])
+        O.object.mode_set(mode='EDIT') #bmesh stuff requires edit mode
+        bm_Obj_main = bmesh.from_edit_mesh(Obj_main.data)      #code altered from a stackexchange post of user "nadal zkz" - link: https://blender.stackexchange.com/questions/49931/select-vertices-by-their-indices-by-vertex-id
+        vertices = [e for e in bm_Obj_main.verts]
+        O.mesh.select_all(action='DESELECT')
+        Obj_main.vertex_groups.active = VG_anchor
+        O.object.vertex_group_select()
+        for i in vertices:
+            if i.select == True:            #saves only the indices of vertices which are inside VG_anchor - and thus are required for fusing later on
+                vertex_indices = vertex_indices + [i.index]
+        O.object.mode_set(mode='OBJECT')
+
+        for i in vertex_indices:
+            VG_new = Obj_main.vertex_groups.new()
+            VG_new.add([i], 1, 'ADD') #doesn't work in edit mode
+            VG_new.name = 'vertex ' + str(i) #not necessary, just for programming comfort
+            vertex_VGs_belly = vertex_VGs_belly + [VG_new] #creating a VG for each single vertex of VG_anchor, and then saving those VGs to a list.
+            
+        select_objects([Obj_main])
         O.object.duplicate()
-        mdd_body = C.object
-        for i in [mdd_belly, mdd_body]:
+        Obj_cutbody = C.object      #Obj main will be reduced to just the belly (using the goal VG), the Obj_cutbody is the body without the belly.
+        for i in [Obj_main, Obj_cutbody]:
             select_objects([i])
             O.object.mode_set(mode='EDIT')
             O.mesh.select_all(action='DESELECT')
             i.vertex_groups.active_index = VG_goal.index #even though modifiers have been applied, the total amount of vertex groups shouldn't have changed. To be safe, we could choose the new index by name this time though.
             O.object.vertex_group_select()
-            if i == mdd_belly:
+            if i == Obj_main:
                 O.mesh.select_all(action='INVERT')
                 O.mesh.delete(type='VERT')
-            elif i == mdd_body:
-                O.mesh.select_less()
+            elif i == Obj_cutbody:
+                i.vertex_groups.active_index = VG_anchor.index
+                bpy.ops.object.vertex_group_deselect()
                 O.mesh.delete(type='VERT')
             O.object.mode_set(mode='OBJECT')
+            
+        for i in vertex_VGs_belly:          #we need to know the VGs of both objects so we can make sure they still have the same names (for merging) later on
+            for g in Obj_cutbody.vertex_groups:
+                if i.index == g.index:
+                    vertex_VGs_body = vertex_VGs_body + [g]
+                    break
+                    
     print('    ... some other stuff again')
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
-        ###Copying SB and any Vertex Weight modifiers to mdd_belly (they have been applied earlier as well). We can't use the copy-attributes addon, because for some reason it doesn't copy the *settings* of a softbody mod. Instead, we'll use the default "link modifiers" option, and delete all other useless modifiers.             
-        select_objects([original_model, mdd_belly])
+        ###Copying SB and any Vertex Weight modifiers to Obj_main (they have been applied earlier as well). We can't use the copy-attributes addon, because for some reason it doesn't copy the *settings* of a softbody mod. Instead, we'll use the default "link modifiers" option, and delete all other useless modifiers.             
+        select_objects([Obj_original, Obj_main])
         O.object.make_links_data(type='MODIFIERS')
-        select_objects([mdd_belly])
-        for mods in mdd_belly.modifiers:
+        select_objects([Obj_main])
+        for mods in Obj_main.modifiers:
             if mods.type not in ["SOFT_BODY", "VERTEX_WEIGHT_EDIT", "VERTEX_WEIGHT_MIX", "VERTEX_WEIGHT_PROXIMITY"]:    #possible bug happening here since list will get smaller while the loop is still running. Didn't test it though.
                 O.object.modifier_remove(modifier = mods.name)         
             if mods.type == 'SOFT_BODY':
-                    mod_SB_temp = mods
-                    mod_SB_temp.show_viewport = False
-        mod_SB_temp.settings.collision_collection   = coll_mdd_collis_obs   #will now use the mdd_collision objects instead of the originals
-        if mod_SB_temp.settings.goal_default != 1 or mod_SB_temp.settings.goal_max != 1:
+                    ModSB_temp = mods
+                    ModSB_temp.show_viewport = False
+        ModSB_temp.settings.collision_collection   = Coll_mddcollision_objs   #will now use the mdd_collision objects instead of the originals
+        if ModSB_temp.settings.goal_default != 1 or ModSB_temp.settings.goal_max != 1:
             print("NOTE: The Default or Max goal value of your softbody wasn't set to 1, so the script assumed those numbers anyway. It needs those values to work properly. You can ignore this message.") 
-        mod_SB_temp.settings.goal_default           = 1
-        mod_SB_temp.settings.goal_max               = 1     #both values need to be turned to 1, otherwise the "anchor points" with a weight of 1 we created will be affected by the softbody mod and thus lose their purpose.
-        mod_SB_temp.show_viewport = True     #if it's hidden at this point no bakes will happen for whatever reason                           
-        select_objects([mdd_belly])
+        ModSB_temp.settings.goal_default           = 1
+        ModSB_temp.settings.goal_max               = 1     #both values need to be turned to 1, otherwise the "anchor points" with a weight of 1 we created will be affected by the softbody mod and thus lose their purpose.
+        ModSB_temp.show_viewport = True     #if it's hidden at this point no bakes will happen for whatever reason                           
+        select_objects([Obj_main])
     print('Finished the Preparing.')
 
 with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
@@ -569,37 +764,35 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
     ############Creating 2 duplicates of the selected objects so we don't mess up the originals
     #and assign them to variables
     O.object.duplicate()
-    for i in C.selected_objects:
-        if i == C.view_layer.objects.active:
-            main_anim = i                      
+    Obj_realmain = C.object                      
      
     
     
     #assigning the softbody-mod to a variable for easy referencing
-    for mods in main_anim.modifiers:         
+    for mods in Obj_realmain.modifiers:         
         if mods.type == 'SOFT_BODY':
-            mod_SB = mods           #the softbody-modifier of the SB_dummy. Note however, that each time we create a new duplicate for baking, we must also assign its softbody modifier to a new variable since this one refers specifially to the SB_dummys SBmod. We could just work with it's name instead but that doesn't feel clean.
+            ModSB_realmain = mods           #the softbody-modifier of the SB_dummy. Note however, that each time we create a new duplicate for baking, we must also assign its softbody modifier to a new variable since this one refers specifially to the SB_dummys SBmod. We could just work with it's name instead but that doesn't feel clean.
         break
 
     #immediately hiding the SB-mod.
-    hide_mods(object = main_anim, hide = True, modifier_list = [mod_SB], noSB = False)  #If the softbody is unhidden when we don't need it, it will likely just cause issues, since it probably bakes a bit already. So, only unhide it when we actually want to bake it, and immediatly afterwards hide it again.
+    hide_mods(object = Obj_realmain, hide = True, modifier_list = [ModSB_realmain], noSB = False)  #If the softbody is unhidden when we don't need it, it will likely just cause issues, since it probably bakes a bit already. So, only unhide it when we actually want to bake it, and immediatly afterwards hide it again.
 
 
     if automatic_scaling == True:
         #since we don't want to mess up the original collision objects as well, we also have to duplicate them, and put the originals into a save collection. Something like this is also done almost immediatly after these lines, which is due to me adding this line of code later and not wanting to understand how these other lines worked exactly.
-        actual_orig_coll_obs = create_collection("actual original coll_obs", avoid_duplicates = True)
-        link_objects(mod_SB.settings.collision_collection.objects, actual_orig_coll_obs)
-        select_objects(actual_orig_coll_obs.objects)
+        Coll_realcollision_objs = create_collection("actual original coll_obs", avoid_duplicates = True)
+        link_objects(ModSB_realmain.settings.collision_collection.objects, Coll_realcollision_objs)
+        select_objects(Coll_realcollision_objs.objects)
         O.object.duplicate()
-        coll_obs_duplicates = C.selected_objects
-        link_objects(C.selected_objects, mod_SB.settings.collision_collection) #selected objects are the duplicates.
+        L_duplcollision_objs = C.selected_objects
+        link_objects(C.selected_objects, ModSB_realmain.settings.collision_collection) #selected objects are the duplicates.
         
-        select_objects([main_anim]+list(coll_obs_duplicates))
+        select_objects([Obj_realmain]+list(L_duplcollision_objs))
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)    #if the locations aren't at 0 0 0, the scaling will lead to different locations than the originals later on.
         
-        select_objects([main_anim]+list(mod_SB.settings.collision_collection.objects))
+        select_objects([Obj_realmain]+list(ModSB_realmain.settings.collision_collection.objects))
         h_thickness = 0       #while we could technically scale our objects to extreme values, we can't forget that the thickness of the collision objects needs to be scaled as well. However, they have a maximum value, which is 1 (1 meter). So we have to find out what the highest scale is at which the highest thickness just reaches 1.
-        for i in mod_SB.settings.collision_collection.objects:
+        for i in ModSB_realmain.settings.collision_collection.objects:
             if i.collision.thickness_outer > h_thickness:
                 h_thickness = i.collision.thickness_outer
             if i.collision.thickness_inner > h_thickness:
@@ -610,21 +803,21 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
         C.scene.tool_settings.transform_pivot_point = 'CURSOR'
         bpy.ops.transform.resize(value=(max_scale,max_scale,max_scale))
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-        for i in mod_SB.settings.collision_collection.objects:
+        for i in ModSB_realmain.settings.collision_collection.objects:
             i.collision.thickness_outer = i.collision.thickness_outer * max_scale
             i.collision.thickness_inner = i.collision.thickness_inner * max_scale
     
     
-    #also set the parent collection of main_anim as the active one, otherwise problems might appear:
-    C.view_layer.active_layer_collection = find_viewlayer_collection(main_anim.users_collection[0].name)
+    #also set the parent collection of Obj_realmain as the active one, otherwise problems might appear:
+    C.view_layer.active_layer_collection = find_viewlayer_collection(Obj_realmain.users_collection[0].name)
      
     
     ###now also the collision objects, put them into a new, temporary collection:
     #but first create the final collections:
-    main_collection = create_collection('SACS_script_results', parent_collection = desired_target_collection, avoid_duplicates = True)
-    sub_collection  = create_collection('frames'+str(true_first_frame)+'-'+str(last_frame), parent_collection = main_collection, avoid_duplicates = False)
-    coll_orig_collision_objs = create_collection('orig collision objs', parent_collection = master_collection, avoid_duplicates = True)
-    link_objects(mod_SB.settings.collision_collection.objects, coll_orig_collision_objs) #function unlinks them from all previous collections, meaning they're not inside the collision collection anymore
+    Coll_main = create_collection('SACS_script_results', parent_collection = desired_target_collection, avoid_duplicates = True)
+    Coll_sub  = create_collection('frames '+str(true_first_frame)+'-'+str(last_frame), parent_collection = Coll_main, avoid_duplicates = False)
+    Coll_collision_objs = create_collection('orig collision objs', parent_collection = master_collection, avoid_duplicates = True)
+    link_objects(ModSB_realmain.settings.collision_collection.objects, Coll_collision_objs) #function unlinks them from all previous collections, meaning they're not inside the collision collection anymore
     #########################################################################
     
     ##setting up datapaths for the mdd-files that this script will create####
@@ -642,7 +835,7 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
 
     ############creating the first import frame##############################
     #This scipt uses the finished bake of the previous frame for the softbody sim of the current frame, but since we don't have a bake at the beginning we simply use the original shape at that frame, and for that it needs to be exported into an .mdd
-    select_objects([main_anim])
+    select_objects([Obj_realmain])
     O.export_shape.mdd (filepath = target_file_calc, frame_start = first_frame*time_stretch_multiplier, frame_end = first_frame*time_stretch_multiplier)
     #########################################################################
 
@@ -651,7 +844,8 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
     #since we bake a softbody sim for each frame, we also need to give those finished bakes /shapes to an object on that frame to actually see it in the final animation. The "permanent duplicate" is that object, it gets more and more frames imported.
     C.scene.frame_set(first_frame * time_stretch_multiplier)
     O.object.object_duplicate_flatten_modifiers() #that's the function of the "Corrective Shape Keys" add-on that creates a static copy of your object.
-    m_a_perm_dupl_calc = C.selected_objects[0]  #(should be the only selected object if the script worked until now)
+    Obj_final = C.selected_objects[0]  #(should be the only selected object if the script worked until now)
+    vertindex_calibrate("transfer_cSK", n_cSK, Obj_final, Obj_realmain)    #duplicate_flatten will lead to the new object having no shapekeys
     
 
     first_frame = first_frame + 1
@@ -665,8 +859,8 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
 for x in range(last_frame - first_frame + 1):
     
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
-        temp_col_objects = duplicate_with_cut_keyframes(target_file_col, coll_orig_collision_objs.objects, [(first_frame) * time_stretch_multiplier, (first_frame) * time_stretch_multiplier + 1], 1, mod_list = [])
-        link_objects(temp_col_objects, mod_SB.settings.collision_collection)
+        temp_col_objects = duplicate_with_cut_keyframes(target_file_col, Coll_collision_objs.objects, [(first_frame) * time_stretch_multiplier, (first_frame) * time_stretch_multiplier + 1], 1, mod_list = [])
+        link_objects(temp_col_objects, ModSB_realmain.settings.collision_collection)
         
         
         C.scene.frame_set(first_frame* time_stretch_multiplier)  #sets the current frame to one of the scaled keyframes of the main animation object
@@ -675,76 +869,78 @@ for x in range(last_frame - first_frame + 1):
         
     print('\nCurrent frame:', int((C.scene.frame_current / time_stretch_multiplier)))
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
-        select_objects([main_anim])
+        select_objects([Obj_realmain])
         O.object.object_duplicate_flatten_modifiers() #creating the (temporary) keyframe-specific duplicate through the "corrective shapekeys" addon. The duplicate gets selected automatically when doing this
-        main_anim_dupl = C.selected_objects[0] #(should be the only selected object)
+        Obj_duplmain = C.selected_objects[0] #(should be the only selected object)
+        vertindex_calibrate("transfer_cSK", n_cSK, Obj_duplmain, Obj_realmain)
+        select_objects([Obj_duplmain])    #dont know if vi_calibrate() saves selection, need to check
         O.import_shape.mdd(filepath=target_file_calc, frame_start=(first_frame - 1) * time_stretch_multiplier, frame_step = 1) #imports the "single_frames_bakes.mdd" on the duplicated object, with stretching of the keyframes according to the time stretch multiplier. This means that even when using no softbody modifier at all, it should still be back to its default shape at the last frame again, as the previous frame is only imported as a shapekey, whose value is keyframed to go down to 0 at the last frame.
-        select_objects([main_anim, main_anim_dupl])
+        select_objects([Obj_realmain, Obj_duplmain])
         O.object.copy_obj_wei()                       #copying vertex weigths (through that 'Copy Attributes Menu' addon)
         O.object.make_links_data(type='MODIFIERS')    #copying modifiers
         
-        for mods in main_anim_dupl.modifiers:         
+        for mods in Obj_duplmain.modifiers:         
             if mods.type == 'SOFT_BODY':
-                mod_SB_t = mods                     #mod_SB (without _t) specifically refers to the SB mod of the original SB-dummy, meaning we have to assign the SB-mod of the temporary duplicate to another, temporary variable to be able to refer to it.
+                ModSB_temp = mods                     #ModSB_realmain (without _t) specifically refers to the SB mod of the original SB-dummy, meaning we have to assign the SB-mod of the temporary duplicate to another, temporary variable to be able to refer to it.
                 break
-        hide_mods(object = main_anim_dupl, hide = True, modifier_list = [mod_SB_t], noSB = False) #as stated before, having a softbody mod unhidden when we don't use it has only possible negative results.
+        hide_mods(object = Obj_duplmain, hide = True, modifier_list = [ModSB_temp], noSB = False) #as stated before, having a softbody mod unhidden when we don't use it has only possible negative results.
         
         ######
         #the next part is for vertex group modifiers that the user might have on his softbody_dummy. Good example is a vertex weight proximity modifier - VWP. Because you can't put it before the SB-mod in the mod-stack you can't effectively use them together for instance. We solve that by simply applying the VWP at the beginning of a frame, so the SB-mod *has* to use the modified vertex group. It doesn't affect the original softbody_dummy in any way (if I didn't mess up), which may be needed in other cases, but that will have to be dealed with when it's needed.
         
-        select_objects([main_anim_dupl])
+        select_objects([Obj_duplmain])
         O.object.duplicate()
-        vw_duplicate = C.object
-        vw_duplicate.active_shape_key_index = 1 #just to be sure. VWP uses the currently selected shapekey with a value of 1 as its base and ignores all others.
-        bpy.ops.object.modifier_remove(modifier=mod_SB.name) #dont want to have any possible baked frames here.
-        delete_basis_SK(vw_duplicate)
-        select_objects([main_anim, vw_duplicate])
+        Obj_vw_duplicate = C.object
+        Obj_vw_duplicate.active_shape_key_index = 1 #just to be sure. VWP uses the currently selected shapekey with a value of 1 as its base and ignores all others.
+        bpy.ops.object.modifier_remove(modifier=ModSB_realmain.name) #dont want to have any possible baked frames here.
+        delete_basis_SK(Obj_vw_duplicate)
+        select_objects([Obj_realmain, Obj_vw_duplicate])
         O.object.copy_obj_wei()             #don't know why I do that but I feel like i have to do that.
-        apply_modifiers(vw_duplicate) #we can apply all modifiers - including the VWP to change Vertex weights. The only purpose of this object is to copy its applied vertex groups to the actual baking duplicate.
+        apply_modifiers(Obj_vw_duplicate) #we can apply all modifiers - including the VWP to change Vertex weights. The only purpose of this object is to copy its applied vertex groups to the actual baking duplicate.
         
         
             
-        #select_objects([vw_duplicate, main_anim]) #if using a VWP global influence of 1 the original VG gets overwritten completely each frame, so there's no need to give it back to the main_ani, we only need to give it to the baking temp. duplicate as this one actually has to use it. Yes, I know, a value of 1 isn't always going to be the case but that's it for now.
-        select_objects([vw_duplicate,main_anim_dupl])
+        #select_objects([Obj_vw_duplicate, Obj_realmain]) #if using a VWP global influence of 1 the original VG gets overwritten completely each frame, so there's no need to give it back to the main_ani, we only need to give it to the baking temp. duplicate as this one actually has to use it. Yes, I know, a value of 1 isn't always going to be the case but that's it for now.
+        select_objects([Obj_vw_duplicate,Obj_duplmain])
         O.object.copy_obj_wei()
         if animate_vgroups == True: #small part to copy and keyframe the new vertex weights to the final result. If the object already has vertex-groups with the same names, they'll just get replaced but keep their keyframes, which is exactly what we need.
-            select_objects([vw_duplicate, m_a_perm_dupl_calc])
+            select_objects([Obj_vw_duplicate, Obj_final])
             bpy.ops.object.copy_obj_wei()
-            select_objects([m_a_perm_dupl_calc])
+            select_objects([Obj_final])
             for i in range(len(list(C.object.vertex_groups))):
                 C.object.vertex_groups.active_index = i
                 bpy.ops.anim.insert_keyframe_animall()
-        select_objects([vw_duplicate])
+        select_objects([Obj_vw_duplicate])
         O.object.delete(use_global=False)
         
         ####
         
         #change its softbody timerange of baking:
-        select_objects([main_anim_dupl])
-        SB_keyframe_insert(((first_frame-1) * time_stretch_multiplier), main_anim_dupl)
-        mod_SB_t.point_cache.frame_start = (first_frame-1) * time_stretch_multiplier - 1  #as explained before, since we keyframe the goal value to be exactly 1 at the starting frame, we then actually start the bake one frame earlier, as it wouldn't have an effect otherwise.  
-        mod_SB_t.point_cache.frame_end = first_frame * time_stretch_multiplier
+        select_objects([Obj_duplmain])
+        SB_keyframe_insert(((first_frame-1) * time_stretch_multiplier), Obj_duplmain)
+        ModSB_temp.point_cache.frame_start = (first_frame-1) * time_stretch_multiplier - 1  #as explained before, since we keyframe the goal value to be exactly 1 at the starting frame, we then actually start the bake one frame earlier, as it wouldn't have an effect otherwise.  
+        ModSB_temp.point_cache.frame_end = first_frame * time_stretch_multiplier
         
   
         #bake it:    
-        hide_mods(object = main_anim_dupl, hide = False, modifier_list = [mod_SB_t], noSB = False)  #A softbody mod cannot bake (and!) show its results if it is hidden, so we unhide it. It does not need to be hidden afterwards again, since the object will just be deleted instead of reused.
-        override = {'scene': C.scene, 'active_object': main_anim_dupl, 'point_cache': mod_SB_t.point_cache}
+        hide_mods(object = Obj_duplmain, hide = False, modifier_list = [ModSB_temp], noSB = False)  #A softbody mod cannot bake (and!) show its results if it is hidden, so we unhide it. It does not need to be hidden afterwards again, since the object will just be deleted instead of reused.
+        override = {'scene': C.scene, 'active_object': Obj_duplmain, 'point_cache': ModSB_temp.point_cache}
         O.ptcache.bake(override, bake=True)
            
         #set the baked tempory duplicate as active again:
-        select_objects([main_anim_dupl])
+        select_objects([Obj_duplmain])
       
         #export the final baked frame into an .mdd and import it on the permanent duplicate:
         O.export_shape.mdd (filepath = target_file_calc, frame_start = first_frame * time_stretch_multiplier, frame_end = first_frame * time_stretch_multiplier)
-        select_objects([m_a_perm_dupl_calc])
+        select_objects([Obj_final])
         O.import_shape.mdd(filepath=target_file_calc, frame_start = (first_frame) *time_stretch_multiplier, frame_step=time_stretch_multiplier)
         
         #delete the temporary duplicate again, a new one will be created in the next round of this for-loop.
-        select_objects([main_anim_dupl])
+        select_objects([Obj_duplmain])
         O.object.delete(use_global=False)
         
         #delete temp collision objects
-        for i in mod_SB.settings.collision_collection.objects:
+        for i in ModSB_realmain.settings.collision_collection.objects:
             select_objects([i])
             O.object.delete(use_global=False)
         
@@ -796,132 +992,153 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
     
     
     
-    m_a_perm_dupl_calc.name = "calc"
+    Obj_final.name = "calc"
 
 
 
-    coll_link_list = [m_a_perm_dupl_calc]       #all objects inside this list will be linked to our new collection later. They'll also be unlinked from their current linked collection, which should only be one.
+    L_final_objs = [Obj_final]       #all objects inside this list will be linked to our new collection later. They'll also be unlinked from their current linked collection, which should only be one.
 
     if main_anim_copy == True:
         target_file_ma_copy = os.path.join(directory, 'main_anim_copy with baked frame')
-        select_objects([main_anim])
+        select_objects([Obj_realmain])
         O.export_shape.mdd (filepath = target_file_ma_copy, frame_start = last_frame + 1, frame_end = anim_last_frame)
         O.object.object_duplicate_flatten_modifiers()
         main_anim_copy = C.selected_objects[0]
-        main_anim_copy.name = main_anim.name + ' baked copy'
+        main_anim_copy.name = Obj_realmain.name + ' baked copy'
         O.import_shape.mdd(filepath=target_file_ma_copy, frame_start = last_frame + 1, frame_step=1) 
-        select_objects([m_a_perm_dupl_calc])
+        select_objects([Obj_final])
         O.export_shape.mdd (filepath = target_file_ma_copy, frame_start = last_frame, frame_end = last_frame)
         select_objects([main_anim_copy])
         O.import_shape.mdd(filepath=target_file_ma_copy, frame_start = last_frame, frame_step=1) 
-        coll_link_list = coll_link_list + [main_anim_copy]
-        select_objects([main_anim, main_anim_copy])
+        L_final_objs = L_final_objs + [main_anim_copy]
+        select_objects([Obj_realmain, main_anim_copy])
         O.object.copy_obj_wei()
 
 
 
-    link_objects(coll_link_list, sub_collection, [])
+    link_objects(L_final_objs, Coll_sub, [])
 
    
     
     #put the duplicates of the actual original collision objects into the collision collection again. #yes I know that this is confusing since they aren't the actual duplicates if automatic_scaling is enabled, I just wanted to add some lines of code without having to revisit the whole script again.
-    link_objects(coll_orig_collision_objs.objects, mod_SB.settings.collision_collection)
+    link_objects(Coll_collision_objs.objects, ModSB_realmain.settings.collision_collection)
 
     #maybe we don't have to link them at all if the originals remained in the original softbody collision collection?
 
     #getting rid of all the stuff we did if the scaling-option is enabled.
     if automatic_scaling == True:
-        select_objects([main_anim]+list(coll_obs_duplicates)+[m_a_perm_dupl_calc])
+        select_objects([Obj_realmain]+list(L_duplcollision_objs)+[Obj_final])
         bpy.ops.transform.resize(value=(1/max_scale,1/max_scale,1/max_scale))
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-        select_objects([main_anim] + list(coll_obs_duplicates))
-        link_objects(actual_orig_coll_obs.objects, mod_SB.settings.collision_collection)
+        select_objects([Obj_realmain] + list(L_duplcollision_objs))
+        link_objects(Coll_realcollision_objs.objects, ModSB_realmain.settings.collision_collection)
         O.object.delete(use_global=False)
-        bpy.data.collections.remove(actual_orig_coll_obs)
+        bpy.data.collections.remove(Coll_realcollision_objs)
         C.scene.tool_settings.transform_pivot_point = scale_orig_p_point
     else:
-        select_objects([main_anim]) #remember that this is a duplicate of the original object, meaning we can safely delete it.
+        select_objects([Obj_realmain]) #remember that this is a duplicate of the original object, meaning we can safely delete it.
         O.object.delete(use_global=False)
 
 
-    bpy.data.collections.remove(coll_orig_collision_objs)   #removes the temporary needed collection for the collision objects. Sidenote: removing a collection will unlink all collections inside from your current scene.
+    bpy.data.collections.remove(Coll_collision_objs)   #removes the temporary needed collection for the collision objects. Sidenote: removing a collection will unlink all collections inside from your current scene.
    
 if easy_mode == True:
     print('easy_mode = True    => Cleaning up stuff...')
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
         ###resetting SB_goal VG to original values
-        VWM_mod = mdd_belly.modifiers.new(name = "resetting SB-goal", type = 'VERTEX_WEIGHT_MIX')   #later change this to be for the finished/fused model
+        VWM_mod = Obj_main.modifiers.new(name = "resetting SB-goal", type = 'VERTEX_WEIGHT_MIX')   #later change this to be for the finished/fused model
         VWM_mod.vertex_group_a = VG_goal.name
         VWM_mod.vertex_group_b = VG_goal_backup.name
         VWM_mod.mix_mode = 'SET'    #sets mix mode to "Replace"
         VWM_mod.mix_set = 'ALL'     #sets mix set to "All"; the default one ("VGroup A and B") does not affect vertices that aren't assigned to a VG. However, using this option will lead to *all* vertices being assigned to VG A, if only with a weight of 0.
         #We should refrain from using VWE mods to remove those 0-weight vertices, since the original vertex group might have had vertices with a weight of 0 as well.
         #Solution: select all vertices of the backup, invert selection and unassign those vertices from the original VG_goal
-        select_objects([mdd_belly])
+        select_objects([Obj_main])
         O.object.modifier_apply(apply_as='DATA', modifier=VWM_mod.name)
         O.object.mode_set(mode='EDIT')
         O.mesh.select_all(action='DESELECT')
-        mdd_belly.vertex_groups.active_index = VG_goal_backup.index
+        Obj_main.vertex_groups.active_index = VG_goal_backup.index
         O.object.vertex_group_select()
         O.mesh.select_all(action='INVERT')
-        mdd_belly.vertex_groups.active_index = VG_goal.index
+        Obj_main.vertex_groups.active_index = VG_goal.index
         O.object.vertex_group_remove_from()
         O.object.mode_set(mode='OBJECT')
         
-        #we first need to delete the goal VG and its backup from the mdd_body object, because the VG_goal and VG_goal_backup refer to the ones of mdd_belly. VG_goal will only get deleted from mdd_body.
-        select_objects([mdd_body])
-        mdd_body.vertex_groups.active_index = mdd_body.vertex_groups[VG_goal_backup.name].index
+        #we first need to delete the goal VG and its backup from the Obj_cutbody object, because the VG_goal and VG_goal_backup refer to the ones of Obj_main. VG_goal will only get deleted from Obj_cutbody.
+        select_objects([Obj_cutbody])
+        Obj_cutbody.vertex_groups.active_index = Obj_cutbody.vertex_groups[VG_goal_backup.name].index
         O.object.vertex_group_remove(all=False, all_unlocked=False)
-        mdd_body.vertex_groups.active_index = mdd_body.vertex_groups[VG_goal.name].index
+        Obj_cutbody.vertex_groups.active_index = Obj_cutbody.vertex_groups[VG_goal.name].index
         O.object.vertex_group_remove(all=False, all_unlocked=False)
 
-        select_objects([mdd_belly])
-        mdd_belly.vertex_groups.active_index = VG_goal_backup.index
+        select_objects([Obj_main])
+        Obj_main.vertex_groups.active_index = VG_goal_backup.index
         O.object.vertex_group_remove(all=False, all_unlocked=False) #deletes the backup VG
 
-        ###removing the SB_mod from mdd_belly
-        for mods in mdd_belly.modifiers:         
+        ###removing the SB_mod from Obj_main
+        for mods in Obj_main.modifiers:         
             if mods.type == 'SOFT_BODY':
-                mod_SB_umodel = mods            #for some reason the variable stopped referencing this mod halfway through, so we'll have to assign it once again.
-        mod_SB_umodel.name = 'You can delete this modifier'
+                ModSB_main = mods            #for some reason the variable stopped referencing this mod halfway through, so we'll have to assign it once again.
+        ModSB_main.name = 'You can delete this modifier'
         try:
-            O.object.modifier_remove(modifier = mod_SB_umodel.name)
+            O.object.modifier_remove(modifier = ModSB_main.name)
         except:
             print('A UnicodeDecodeError happened when trying to remove the softbody-modifier of the result. The result will continue as normal, but you will have to remove the modifier yourself - it is not required however')    #I GOT NO FUCKING IDEA WHY IT HAPPENS SOMETIMES.
         
         ###giving the finished/animation of the calc result
-        select_objects([m_a_perm_dupl_calc])
+        select_objects([Obj_final])
         O.export_shape.mdd (filepath = target_file_calc, frame_start = true_first_frame, frame_end = true_last_frame)
         O.object.delete(use_global=False)
-        m_a_perm_dupl_calc = mdd_belly
-        select_objects([mdd_belly])
+        Obj_final = Obj_main
+
+        select_objects([Obj_final])
+        O.object.duplicate()
+        vi_belly = C.selected_objects[0]
+        vi_belly.name = "VI_belly"
+        select_objects([Obj_final])
+        
         O.object.mode_set(mode='EDIT')
-        mdd_belly.active_shape_key_index = 0            #I dont fucking understand why, but whenever I tried to remove the shapekeys, it didn't get the Basis Shape, but the one of the last frame. Only way I got it to work is to go into edit mode and select the Basis shapekey in there.
+        Obj_final.active_shape_key_index = 0            #I dont fucking understand why, but whenever I tried to remove the shapekeys, it didn't get the Basis Shape, but the one of the last frame. Only way I got it to work is to go into edit mode and select the Basis shapekey in there.
         O.object.mode_set(mode='OBJECT')
-        mdd_belly.shape_key_clear()        
+        Obj_final.shape_key_clear()        
         O.import_shape.mdd(filepath=target_file_calc, frame_start = true_first_frame)
         
-        
+
         ###fusing the two body parts together again
-        select_objects([mdd_belly, mdd_body])
+        vertindex_calibrate("transfer_cSK", n_cSK, Obj_final, vi_belly)
+        select_objects([Obj_final])
+        for i in range(len(vertex_VGs_belly)):  #first making sure Obj_final's and Obj_cutbody's single-vertex-VGs have the same names so they can be merged. Attention: Calling Obj_cutbody variables after joining can lead to crashs.
+            vertex_VGs_body[i].name = vertex_VGs_belly[i].name
+        select_objects([Obj_final, Obj_cutbody])
+
         O.object.join()
         O.object.mode_set(mode='EDIT')
-        O.mesh.select_all(action='SELECT')
-        O.mesh.remove_doubles(threshold=0.0001)
+        for i in vertex_VGs_belly:      #goes through the VGs that now contain the same two vertices (of both objects) each one by one, and merges those two vertices.
+            O.mesh.select_all(action='DESELECT')
+            Obj_final.vertex_groups.active = i
+            O.object.vertex_group_select()
+            O.mesh.remove_doubles(threshold=0.0001)
         O.object.mode_set(mode='OBJECT')
+
+        for i in vertex_VGs_belly:
+            Obj_final.vertex_groups.remove(i)
+        Obj_final.vertex_groups.remove(VG_anchor)
+        
         
         ###cleaning up 
-        mdd_belly.name = 'calc'
-        link_objects([mdd_belly], sub_collection, [])
-        select_objects(mdd_collis_obs)
+        Obj_final.name = 'calc'
+        vertindex_calibrate("reset_vi", n_cSK, Obj_final, Obj_VI_main)
+        vertindex_calibrate("delete_cSK", n_cSK, Obj_final)
+        link_objects([Obj_final], Coll_sub, [])
+        select_objects(L_mddcollision_objs + [vi_belly] + [Obj_VI_main])
         O.object.delete(use_global=False)
-        D.collections.remove(coll_mdd_collis_obs)
+        D.collections.remove(Coll_mddcollision_objs)
         
 with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
-    mod_SB_orig.show_viewport = show_viewport_of_SB_orig #resetting to the state it had at the beginning
+    ModSB_original.show_viewport = show_viewport_of_SB_orig #resetting to the state it had at the beginning
     C.view_layer.active_layer_collection = ori_av_layercoll
     C.scene.frame_set(default_frame)  #small note, just noticed that using this line will make your current active object not be active anymore.
-    select_objects([m_a_perm_dupl_calc])
+    select_objects([Obj_final])
 
     time_script_end = time.time()
 print('\n\nScript took %s minutes to finish.' % (round(((time_script_end - time_script_begin)/60),2)))
@@ -929,6 +1146,7 @@ print('One frame needed %s seconds on average to finish baking.' % (round(((time
 
 
 print('\n\n'+2*print_symbol_asterik+'\nScript finished!\n\n'+2*print_symbol_asterik+'\n\n\n\n\n\n')
+
 
 
 #Used references (most of the problems that these are about aren't really something your average Joe, or me, could solve by himself):
