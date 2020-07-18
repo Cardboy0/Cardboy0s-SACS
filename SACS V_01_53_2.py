@@ -17,7 +17,7 @@
 # ##### END GPL LICENSE BLOCK #####
 
 
-#Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.53  (I often forget to actually update this number so don't trust it)
+#Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.53.2  (I often forget to actually update this number so don't trust it)
 #Author: Cardboy0 (https://twitter.com/cardboy0)
 #Made for Blender 2.83
 
@@ -116,6 +116,8 @@ easy_mode = True                    #(default = True)
 #################################
 #############CHANGELOG###########
 
+#V 1.53.2
+#       - Fixed a bug were it didn't work when using a certain dick-object
 #V 1.53
 #       - Result works with Retroactive-Beautifier-Script again.
 #V 1.50
@@ -651,9 +653,9 @@ if easy_mode == True: #does a lot of automation
                     apply_invert = True
                     L_mods_collision = L_mods_collision + [mods.name]
             apply_modifiers(object = i, modifier_list = L_mods_collision, invert = apply_invert, delete_hidden = True)            #applys/deletes all modifiers except any collision modifiers the object might have
-            O.anim.keyframe_clear_v3d() #clears all transformation keyframes of the object (Object -> animation -> clear keyframe). We might have to delete all keyframes though.
             O.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
             O.object.transform_apply(location=True, rotation=True, scale=True)
+            i.animation_data_clear() #deletes all keyframes
             if i == Obj_main: #resetting the armatures of Obj_main to their original state (rest or pose) since we temporily changed them to rest.
                 n = 0                     
                 for mods in Obj_original.modifiers:         
@@ -787,6 +789,9 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
         L_duplcollision_objs = C.selected_objects
         link_objects(C.selected_objects, ModSB_realmain.settings.collision_collection) #selected objects are the duplicates.
         
+        for i in [Obj_realmain]+list(L_duplcollision_objs):
+            for e in [0,1,2]:
+                i.lock_scale[e] = False       #if scaling is locked we obviously can't scale them
         select_objects([Obj_realmain]+list(L_duplcollision_objs))
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)    #if the locations aren't at 0 0 0, the scaling will lead to different locations than the originals later on.
         
@@ -801,12 +806,14 @@ with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
         #Some pivot points, like invidual origins, give wrong results. Using the 3D Cursor works though.
         scale_orig_p_point = C.scene.tool_settings.transform_pivot_point
         C.scene.tool_settings.transform_pivot_point = 'CURSOR'
+
         bpy.ops.transform.resize(value=(max_scale,max_scale,max_scale))
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         for i in ModSB_realmain.settings.collision_collection.objects:
             i.collision.thickness_outer = i.collision.thickness_outer * max_scale
             i.collision.thickness_inner = i.collision.thickness_inner * max_scale
     
+
     
     #also set the parent collection of Obj_realmain as the active one, otherwise problems might appear:
     C.view_layer.active_layer_collection = find_viewlayer_collection(Obj_realmain.users_collection[0].name)
@@ -1171,4 +1178,3 @@ print('\n\n'+2*print_symbol_asterik+'\nScript finished!\n\n'+2*print_symbol_aste
 #   - If your softbody seems to get stuck, or even sucked into your collision object (CO), try inverting the normals of the CO. It happened to me in one of my files for all collision objects (I have no idea how), but that fixed it.
 #   - If the script seems to run very slow even when only baking frames where there aren't any collisions yet, stop the script by pressing ctrl+c in the console, and undo the run-script-action. Just click around in your scene a bit, unhide your collision objects and select your 2 objects again. It sometimes happens to me, I don't really know why, but it almost always seems to not happen more than once in a row. If you actually let the script run until it's finished you'll notice that the results already start deforming too early (and probably not in the right way), for whatever reason.  
 #   - visit https://www.deviantart.com/cardboy0/journal/Troubleshooting-823914200 for more troubleshooting
-
