@@ -17,9 +17,9 @@
 # ##### END GPL LICENSE BLOCK #####
 
 
-#Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.53.2  (I often forget to actually update this number so don't trust it)
+#Scriptname & version: Cardboy0's shapekey- and animation-compliant softbodies - V.1.53.2.1  (I often forget to actually update this number so don't trust it)
 #Author: Cardboy0 (https://twitter.com/cardboy0)
-#Made for Blender 2.83
+#Made for Blender 2.91
 
 
 
@@ -116,6 +116,8 @@ easy_mode = True                    #(default = True)
 #################################
 #############CHANGELOG###########
 
+#V 1.53.2.1
+#       - Extremely minor changes so it should now work with Blender 2.91
 #V 1.53.2
 #       - Fixed a bug were it didn't work when using a certain dick-object
 #V 1.53
@@ -214,7 +216,7 @@ def apply_modifiers(object, modifier_list = [], invert = False, delete_hidden = 
             if i in object.modifiers.keys():
                 if object.modifiers[i].show_viewport == True:
                     try:
-                        O.object.modifier_apply(override, apply_as='DATA', modifier = i)
+                        O.object.modifier_apply(override, modifier = i)
                     except RuntimeError:
                         print("OOPS! MODIFIER", i, "IS DISABLED! IT WILL BE DELETED") #trying to apply a disabled modifiier leads to an error message, but I didn't figure out how to check if it's disabled. Thus, we'll have to deal with the error instead.
                         print("ERROR TYPE IS", sys.exc_info()[0])
@@ -224,7 +226,7 @@ def apply_modifiers(object, modifier_list = [], invert = False, delete_hidden = 
     elif delete_hidden == False:
         for i in modifier_list:
             if i in object.modifiers.keys():
-                O.object.modifier_apply(override, apply_as='DATA', modifier = i)
+                O.object.modifier_apply(override, modifier = i)
 
             
 #function that allows for hiding or unhiding certain, or all, modfiers. hide = False will unhide, an empty modifier list will do that with all mods. Often you don't want to hide the SB mod, so I made noSB to restrict it from being hidden. 
@@ -1061,7 +1063,7 @@ if easy_mode == True:
         #We should refrain from using VWE mods to remove those 0-weight vertices, since the original vertex group might have had vertices with a weight of 0 as well.
         #Solution: select all vertices of the backup, invert selection and unassign those vertices from the original VG_goal
         select_objects([Obj_main])
-        O.object.modifier_apply(apply_as='DATA', modifier=VWM_mod.name)
+        O.object.modifier_apply(modifier=VWM_mod.name)
         O.object.mode_set(mode='EDIT')
         O.mesh.select_all(action='DESELECT')
         Obj_main.vertex_groups.active_index = VG_goal_backup.index
